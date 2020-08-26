@@ -468,6 +468,9 @@ def final_process(first_pass_dataframe, underlying_dataframe):
 
 if __name__ == "__main__":   
 
+
+	#Edit SYMBOL, start_date, and end_date below
+
 	SYMBOL='HD'
 	start_date='2018-01-01'
 	end_date='2020-07-01'
@@ -475,19 +478,22 @@ if __name__ == "__main__":
 
 	#Dates must be first day of month.  Otherwise, you'll get all sorts of errors.
 
-	API_key = "KjcDWUZqzMkUBtE7TVIl0ECNI8WS"
+	API_key = #Insert your own API key for tradier
+
+	#----------
+
 
 	tp=Analyzer(SYMBOL, start_date, end_date, API_key)
 
 	underlying=tp.pull_underlying()
 	underlying.to_csv('data/{}-underlying_data_{}_to_{}.csv'.format(SYMBOL,start_date,end_date), index_label='date')
 
-	#tickers=tp.make_tickers(underlying)
+	tickers=tp.make_tickers(underlying)
 
-	#dxs=tp.first_pass_pullup(tickers)
-	#dxs.to_csv('data/date-x-strikes-{}.csv'.format(SYMBOL), index_label='date')
+	dxs=tp.first_pass_pullup(tickers)
+	dxs.to_csv('data/date-x-strikes-{}.csv'.format(SYMBOL), index_label='date')
 	
-	#result=final_process(dxs, underlying)
-	#result.to_csv('data/{}--Analyzer_Results_{}_to_{}.csv'.format(SYMBOL,start_date,end_date), index_label='index')
+	result=final_process(dxs, underlying)
+	result.to_csv('data/{}--Analyzer_Results_{}_to_{}.csv'.format(SYMBOL,start_date,end_date), index_label='index')
 
 
