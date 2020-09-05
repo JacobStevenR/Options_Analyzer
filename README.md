@@ -14,6 +14,10 @@ Pulls Options data from Tradier and organizes it in a dataframe/csv of form:
 Where index is multi-index of date and the distance between that date and the expiration date of the option.  The columns are -20 to +20, which correlates to the distance the option strike price is from the underlying stock price on a particular day.
 
 
+Also included is a script called golden_cross.py which analyzes underlying stock prices and checks to see if golden cross TA can predict price increases.  
+
+
+
 Versions and packages used for this project:
 
 Python 3.8.5  
