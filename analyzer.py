@@ -1,3 +1,15 @@
+'''
+NOTES:
+When trying to analyzer SPCE, if I try to include 2019 dates, I get the error:
+
+cannot concatenate object of type '<class 'list'>'; only Series and DataFrame objs are valid
+
+I think this has something to do with SPCE being a very new stock.  IPO was end of Oct 2019.  I guess those first two months Tradier has them 
+formated differently and it fucks with my code.  If I only pull 2020 data, it works fine.  Might be something worth looking into.
+
+
+
+'''
 import requests
 import pandas as pd
 import numpy as np
@@ -386,6 +398,155 @@ class Analyzer(object):
 
 		return dxs
 
+	def first_pass_pullup_tickers(self, tickers_df):
+		'''
+		Takes a dataframe of tickers from Analyzer.make_tickers() and
+		creates df of form:
+		------------------------------------------------------
+		|		strike1        	strike2         strike3
+		|		expiry_dist1	expiry_dist2	expiry_dist3
+		|
+		|date1
+		|date2
+		|date3
+
+		This does not do the Tradier lookup.  Instead, it makes an identical df...but instead of prices, it shows the tickers
+		
+		This lookup overloads the CPU/memory really quickly, so you should only use it for a month of data at a time.  
+		Solutions to speed it up are welcome
+		
+
+		
+
+		'''
+		num_tickers=len(tickers_df)
+
+		start_date_dt=self.datestring_to_datetime(self.start_date).replace(day=1)
+		end_date_dt=self.datestring_to_datetime(self.end_date).replace(day=1)
+		#change dates to first of month...keep it simple
+
+		delta=relativedelta(end_date_dt,start_date_dt) #Gets time between dates
+		num_months=(delta.years*12)+delta.months       #Gets # of months between the two dates
+
+
+		e_carry=[]
+		not_first_run=False
+		num=1
+
+		for n in range(0,num_months):
+			#cycles through num of months between the start and end date
+
+
+			start_month=start_date_dt+pd.DateOffset(months=n)
+
+			end_month=start_month+pd.DateOffset(days=calendar.monthrange(start_month.year,start_month.month)[1]-1)
+			#Gets first and last day of each month within the daterange like in make_tickers()
+
+			
+			ticker_slice=tickers_df.loc[tickers_df['month_start'].astype('datetime64[ns]')==start_month]
+			
+			#slices out by month
+			
+			#strikes is a list of all strikes in the tickers csv for this month slice
+			#exps is a list of all the expiry distances in the tickers csv for this month slice
+			strikes=[s for s in range(ticker_slice['strike'].min(),(ticker_slice['strike'].max()+1))]
+			exps=[e for e in range(ticker_slice['expiry_dist'].min(), (ticker_slice['expiry_dist'].max()+1))]
+
+			#columns_to_drop = ['open','high','low','close']
+			##if you want volumes instead of closes
+
+
+			#feed this to .drop() so that I only have 'date' as index and one other column
+
+		
+			for s in strikes:
+				for e in exps:
+					print('{}/{} tickers'.format(num, num_tickers)) #keep track of where you are in the process
+					num+=1
+
+					ticker= ticker_slice.loc[ticker_slice['expiry_dist']==e].loc[ticker_slice['strike']==s]['ticker'] 
+					#Locate the ticker with a specific expiry_dist /strike combo.  Should only be one per slice
+					
+					start= ticker_slice.loc[ticker_slice['expiry_dist']==e].loc[ticker_slice['strike']==s]['month_start']
+					end= ticker_slice.loc[ticker_slice['expiry_dist']==e].loc[ticker_slice['strike']==s]['month_end']
+					#Use this start and end date for the tradier lookup
+					
+					
+					#Instead of a tradier lookup, a dictionary is manually created of the same form
+
+					dates=pd.date_range(start_month,end_month,freq='d')
+
+					dic={'date':[], 'ticker':[]}
+					dic['date']=dates
+					dic['ticker']=np.full(len(dates),'.')
+								#np seems to be the fastest way to fill the list.  Still gets bogged down in memory around 700 tickers in
+								#[ticker]*len(dates)
+								#[ticker for i in range(len(dates))]
+					
+
+					try:
+						#PERFORM ACTIONS HERE.  The rest of this is error handling
+						if not_first_run:
+							'''
+							the 'not_first_run' if/else statement initializes the df on first runthrough
+							and then just concatenates to that original df each subsequent tradier lookup
+							It's a little hackey, but it works
+							'''
+
+							history=dic
+							nexd = pd.DataFrame(history)
+							nexd['date'] = nexd['date'].astype('datetime64[ns]')
+							nexd.set_index('date', inplace=True)
+							
+							nexd.rename(columns={'ticker':(s,e)}, inplace=True)
+							#renames the 'close' column to (strike, expiry_dist) tuple.  Can be converted to multi-index
+
+							e_carry=pd.concat([e_carry,nexd])
+							
+
+						else:
+							not_first_run=True
+							history=dic
+							e_carry = pd.DataFrame(history)
+							e_carry['date'] = e_carry['date'].astype('datetime64[ns]')
+							e_carry.set_index('date', inplace=True)
+							
+							e_carry.rename(columns={'ticker':(s,e)}, inplace=True)
+							#save each column as tuple so I can convert to multi-index later
+
+					except KeyError as k:
+						
+						print(k)
+						continue
+
+					except TypeError as t:
+						print(t)
+						continue
+
+					except ValueError as v:
+						#Sometimes there's only one datapoint, and throws this error
+						#because it's a scalar value and fucks with pandas
+						#I just ignore this data.  Woe is me.  I'll fix it one day.
+						print(v)
+						continue
+					except Traceback as e:
+						#Since the ticker/tradier lookups take so long, sometimes the script
+						#times out.  This just allows the program to keep running if that happens
+						print(e)
+						continue
+		
+		
+		#e_carry.to_csv('e_carry-{}.csv'.format(SYMBOL), index_label='date') #In case you want to see this monstrosity of a df for some reason
+		dxs=pd.concat([e_carry.loc[e_carry[c].notna(), c] for c in e_carry.columns], axis=1)
+		#All the concatenations in the previous loop creates a very sloppy df with
+		#many duplicate columns full of null values.
+		#This line consolidates the dataframe and removes extraneous columns
+
+		return dxs
+
+
+
+
 
 def final_process(first_pass_dataframe, underlying_dataframe):
 	'''
@@ -471,14 +632,15 @@ if __name__ == "__main__":
 
 	#Edit SYMBOL, start_date, and end_date below
 
-	SYMBOL='HD'
-	start_date='2018-01-01'
-	end_date='2020-07-01'
+	SYMBOL='AMD'
+	start_date='2018-04-01'
+	end_date='2018-07-01'
 	#Dates in form '%Y-%m-%d', eg '2020-08-16'
 
 	#Dates must be first day of month.  Otherwise, you'll get all sorts of errors.
 
-	API_key = #Insert your own API key for tradier
+	API_key = "KjcDWUZqzMkUBtE7TVIl0ECNI8WS"
+
 
 	#----------
 
@@ -490,10 +652,21 @@ if __name__ == "__main__":
 
 	tickers=tp.make_tickers(underlying)
 
-	dxs=tp.first_pass_pullup(tickers)
-	dxs.to_csv('data/date-x-strikes-{}.csv'.format(SYMBOL), index_label='date')
+
+	#uncomment what you want to use
+
+	#--------Results are tickers-----------------------
+	dxs_tickers=tp.first_pass_pullup_tickers(tickers)
+	dxs_tickers.to_csv('data/date-x-strikes-tickers-{}.csv'.format(SYMBOL), index_label='date')
+
+	result_tickers=final_process(dxs_tickers, underlying)
+	result_tickers.to_csv('data/{}--Analyzer_Results_{}_to_{}_TICKERS.csv'.format(SYMBOL,start_date,end_date), index_label='index')
+
+	#---------Results are options prices----------------
+	#dxs=tp.first_pass_pullup(tickers)
+	#dxs.to_csv('data/date-x-strikes-{}.csv'.format(SYMBOL), index_label='date')
 	
-	result=final_process(dxs, underlying)
-	result.to_csv('data/{}--Analyzer_Results_{}_to_{}.csv'.format(SYMBOL,start_date,end_date), index_label='index')
+	#result=final_process(dxs, underlying)
+	#result.to_csv('data/{}--Analyzer_Results_{}_to_{}.csv'.format(SYMBOL,start_date,end_date), index_label='index')
 
 
