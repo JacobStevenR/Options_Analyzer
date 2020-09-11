@@ -167,8 +167,11 @@ class Analyzer(object):
 			current_month=underlying[start_month:end_month] #slices out month in underlying
 
 			
-			high=current_month['close'].max()
-			low=current_month['close'].min()
+			high=5*round(current_month['close'].max()/5)
+			low=5*round(current_month['close'].min()/5)
+			
+
+
 			#Gets high and low closes of current month
 			#Use this to determine strike ranges to pull from tradier
 			
@@ -478,7 +481,7 @@ class Analyzer(object):
 
 					dic={'date':[], 'ticker':[]}
 					dic['date']=dates
-					dic['ticker']=np.full(len(dates),'.')
+					dic['ticker']=np.full(len(dates),ticker)
 								#np seems to be the fastest way to fill the list.  Still gets bogged down in memory around 700 tickers in
 								#[ticker]*len(dates)
 								#[ticker for i in range(len(dates))]
@@ -591,9 +594,11 @@ def final_process(first_pass_dataframe, underlying_dataframe):
 	
 	for index, row in uld.iterrows():
 		
-		up=int(round(row['close']))
+		
 		#Gotta remove the .0 from the end of each number so up matches index...that's why we set it to int()
 		#up=underlying price for current day
+		up=int(5*round(row['close']/5))
+		#round to nearest 5 since most stocks don't have options at odd prices like 352...rather they would have the option at 355
 		
 		try:
 			day=dxs.loc[index]
@@ -632,14 +637,14 @@ if __name__ == "__main__":
 
 	#Edit SYMBOL, start_date, and end_date below
 
-	SYMBOL='AMD'
-	start_date='2018-04-01'
-	end_date='2018-07-01'
+	SYMBOL='NVDA'
+	start_date='2020-06-01'
+	end_date='2020-07-01'
 	#Dates in form '%Y-%m-%d', eg '2020-08-16'
 
 	#Dates must be first day of month.  Otherwise, you'll get all sorts of errors.
 
-	API_key = "KjcDWUZqzMkUBtE7TVIl0ECNI8WS"
+	API_key = ""#insert your own API key here
 
 
 	#----------
@@ -656,17 +661,17 @@ if __name__ == "__main__":
 	#uncomment what you want to use
 
 	#--------Results are tickers-----------------------
-	dxs_tickers=tp.first_pass_pullup_tickers(tickers)
-	dxs_tickers.to_csv('data/date-x-strikes-tickers-{}.csv'.format(SYMBOL), index_label='date')
+	#dxs_tickers=tp.first_pass_pullup_tickers(tickers)
+	#dxs_tickers.to_csv('data/date-x-strikes-tickers-{}.csv'.format(SYMBOL), index_label='date')
 
-	result_tickers=final_process(dxs_tickers, underlying)
-	result_tickers.to_csv('data/{}--Analyzer_Results_{}_to_{}_TICKERS.csv'.format(SYMBOL,start_date,end_date), index_label='index')
+	#result_tickers=final_process(dxs_tickers, underlying)
+	#result_tickers.to_csv('data/{}--Analyzer_Results_{}_to_{}_TICKERS.csv'.format(SYMBOL,start_date,end_date), index_label='index')
 
 	#---------Results are options prices----------------
-	#dxs=tp.first_pass_pullup(tickers)
-	#dxs.to_csv('data/date-x-strikes-{}.csv'.format(SYMBOL), index_label='date')
+	dxs=tp.first_pass_pullup(tickers)
+	dxs.to_csv('data/date-x-strikes-{}.csv'.format(SYMBOL), index_label='date')
 	
-	#result=final_process(dxs, underlying)
-	#result.to_csv('data/{}--Analyzer_Results_{}_to_{}.csv'.format(SYMBOL,start_date,end_date), index_label='index')
+	result=final_process(dxs, underlying)
+	result.to_csv('data/{}--Analyzer_Results_{}_to_{}.csv'.format(SYMBOL,start_date,end_date), index_label='index')
 
 
